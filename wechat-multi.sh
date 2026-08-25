@@ -11,6 +11,8 @@ SECOND_BUNDLE_ID="com.tencent.xinWeChat2"
 
 PLISTBUDDY="/usr/libexec/PlistBuddy"
 
+ASSUME_YES=0
+
 # ---------- Helpers ----------
 
 info() {
@@ -37,6 +39,54 @@ die() {
 require_sudo() {
     info "Administrator privileges are required."
     sudo -v || die "Unable to obtain administrator privileges."
+}
+
+confirm_risk() {
+    local action="$1"
+
+    echo
+    warn "Please review before continuing:"
+    echo
+    echo "  - This is an unofficial workaround, not endorsed by Tencent."
+    echo "  - The modified app is ad-hoc signed, not signed by Tencent."
+    echo "  - A future WeChat or macOS update may break this method."
+
+    case "$action" in
+        install)
+            echo "  - WeChat and WeChat2 will be closed."
+            echo "  - WeChat2.app will be created in /Applications."
+            ;;
+        update)
+            echo "  - WeChat and WeChat2 will be closed."
+            echo "  - Current WeChat2.app will be replaced."
+            echo "  - The previous version is kept as WeChat2.old.app."
+            ;;
+        rollback)
+            echo "  - WeChat and WeChat2 will be closed."
+            echo "  - Current WeChat2.app will be deleted."
+            echo "  - WeChat2.old.app will be restored."
+            ;;
+    esac
+
+    echo "  - Chat data under ~/Library/Containers is NOT touched."
+    echo
+
+    if [ "$ASSUME_YES" = "1" ]; then
+        info "Confirmation skipped (--yes)."
+        return
+    fi
+
+    printf "Continue? [y/N] "
+    read -r reply
+
+    case "$reply" in
+        y|Y|yes|YES)
+            ;;
+        *)
+            info "Aborted. No changes were made."
+            exit 0
+            ;;
+    esac
 }
 
 get_bundle_id() {
@@ -135,11 +185,13 @@ install_failed() {
 
 install_wechat2() {
     check_main_wechat
-    require_sudo
 
     if [ -d "$WECHAT2" ]; then
         die "WeChat2.app already exists. Use '$0 update' instead."
     fi
+
+    confirm_risk install
+    require_sudo
 
     quit_wechat
 
@@ -162,7 +214,6 @@ install_wechat2() {
 
 update_wechat2() {
     check_main_wechat
-    require_sudo
 
     [ -d "$WECHAT2" ] || \
         die "WeChat2.app does not exist. Use '$0 install' first."
@@ -185,6 +236,9 @@ update_wechat2() {
         warn "WeChat2 is already the same version as WeChat."
         return
     fi
+
+    confirm_risk update
+    require_sudo
 
     quit_wechat
 
@@ -241,10 +295,11 @@ update_failed() {
 }
 
 rollback_wechat2() {
-    require_sudo
-
     [ -d "$WECHAT2_OLD" ] || \
         die "No WeChat2.old.app backup found."
+
+    confirm_risk rollback
+    require_sudo
 
     quit_wechat
 
@@ -325,10 +380,35 @@ Usage:
 
   $0 help
       Show this help.
+
+Options:
+
+  -y, --yes
+      Skip the interactive risk confirmation.
 EOF
 }
 
-case "${1:-}" in
+COMMAND="${1:-}"
+
+if [ $# -gt 0 ]; then
+    shift
+fi
+
+for arg in "$@"; do
+    case "$arg" in
+        -y|--yes)
+            ASSUME_YES=1
+            ;;
+        *)
+            error "Unknown option: $arg"
+            echo
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+case "$COMMAND" in
     install)
         install_wechat2
         ;;
@@ -345,7 +425,7 @@ case "${1:-}" in
         usage
         ;;
     *)
-        error "Unknown command: $1"
+        error "Unknown command: $COMMAND"
         echo
         usage
         exit 1

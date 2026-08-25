@@ -63,16 +63,21 @@ No third-party dependencies are required.
 
 ## Installation
 
-Clone the repository:
+The whole tool is a single script. Cloning the repository is not required.
+
+### Option 1: Download the script only (recommended)
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
-cd wechat-mac-multi-instance
+curl -fsSL -o wechat-multi.sh \
+    https://raw.githubusercontent.com/yuluod/wechat-mac-multi-instance/main/wechat-multi.sh
+chmod +x wechat-multi.sh
 ```
 
-Make the script executable:
+### Option 2: Clone the repository
 
 ```bash
+git clone https://github.com/yuluod/wechat-mac-multi-instance.git
+cd wechat-mac-multi-instance
 chmod +x wechat-multi.sh
 ```
 
@@ -80,6 +85,27 @@ Create the second WeChat instance:
 
 ```bash
 ./wechat-multi.sh install
+```
+
+Before making any changes, the script shows a summary of what will happen and asks for confirmation:
+
+```text
+! Please review before continuing:
+
+  - This is an unofficial workaround, not endorsed by Tencent.
+  - The modified app is ad-hoc signed, not signed by Tencent.
+  - A future WeChat or macOS update may break this method.
+  - WeChat and WeChat2 will be closed.
+  - WeChat2.app will be created in /Applications.
+  - Chat data under ~/Library/Containers is NOT touched.
+
+Continue? [y/N]
+```
+
+The same confirmation applies to `update` and `rollback`. To skip it (e.g. in automation), pass `-y` / `--yes`:
+
+```bash
+./wechat-multi.sh install --yes
 ```
 
 The script will create:
@@ -168,27 +194,45 @@ The current WeChat2 application will be removed and the previous application res
 
 ## Chat Data
 
-This script intentionally does **not** manipulate WeChat chat databases or data directories.
+### Data Isolation
 
-In particular, it does not copy, delete, or modify paths under:
+Because WeChat2 uses a different Bundle ID, macOS gives it a completely separate sandbox container. The two instances never share accounts, sessions, or chat history:
+
+```text
+~/Library/Containers/com.tencent.xinWeChat/    # WeChat  data
+~/Library/Containers/com.tencent.xinWeChat2/   # WeChat2 data
+```
+
+WeChat 4.x may also store chat files under a user-selected or default data directory, typically:
+
+```text
+~/Documents/xwechat_files/
+```
+
+Each logged-in account gets its own subdirectory there, so the two instances do not conflict.
+
+### Login State Across Updates
+
+The `update` and `rollback` commands only replace the application bundle. The Bundle ID stays `com.tencent.xinWeChat2`, so the container path does not change and WeChat2 keeps its login state and chat history after an update.
+
+### What This Script Never Touches
+
+This script intentionally does **not** copy, delete, or modify anything under:
 
 ```text
 ~/Library/Containers/
+~/Documents/xwechat_files/
 ```
 
-or WeChat 4.x data such as:
+### Backup Recommendations
+
+Before major WeChat or macOS upgrades, back up:
 
 ```text
-xwechat_files
+~/Library/Containers/com.tencent.xinWeChat2/
 ```
 
-Updating WeChat2 only replaces the application bundle while keeping the same secondary Bundle ID:
-
-```text
-com.tencent.xinWeChat2
-```
-
-Back up important WeChat data separately before making major application or macOS upgrades.
+and the corresponding account directories under `xwechat_files`. WeChat's built-in chat history backup/migration is also an option.
 
 ## How It Works
 
@@ -236,7 +280,13 @@ sudo rm -rf /Applications/WeChat2.old.app
 
 This project does not automatically delete WeChat data from `~/Library/Containers`.
 
-If you want to remove associated application data as well, identify and back up the relevant data first rather than deleting it blindly.
+If you also want to remove the WeChat2 data (this permanently deletes its login state and chat history), the container is located at:
+
+```text
+~/Library/Containers/com.tencent.xinWeChat2/
+```
+
+Back up the relevant data first rather than deleting it blindly. Data of the official WeChat under `com.tencent.xinWeChat` is not affected.
 
 ## License
 
