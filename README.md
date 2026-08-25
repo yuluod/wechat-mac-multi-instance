@@ -128,7 +128,7 @@ Log in to your second WeChat account normally.
 
 When WeChat releases a new version, update the official `WeChat.app` first.
 
-After confirming the official WeChat works correctly, run:
+Auto-update is not supported. WeChat2 does not upgrade automatically when the official WeChat is updated — run the command below manually after confirming the official WeChat works correctly:
 
 ```bash
 ./wechat-multi.sh update
