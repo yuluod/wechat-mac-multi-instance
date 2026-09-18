@@ -9,6 +9,11 @@ WECHAT2_OLD="/Applications/WeChat2.old.app"
 MAIN_BUNDLE_ID="com.tencent.xinWeChat"
 SECOND_BUNDLE_ID="com.tencent.xinWeChat2"
 
+# Process-match patterns (ERE, dots escaped). Matching on /Contents/ limits
+# the match to processes actually running from the bundles.
+WECHAT_PROC_PATTERN='/Applications/WeChat\.app/Contents/'
+WECHAT2_PROC_PATTERN='/Applications/WeChat2\.app/Contents/'
+
 PLISTBUDDY="/usr/libexec/PlistBuddy"
 
 ASSUME_YES=0
@@ -77,9 +82,9 @@ confirm_risk() {
     fi
 
     printf "Continue? [y/N] "
-    read -r reply
+    read -r reply || true
 
-    case "$reply" in
+    case "${reply:-}" in
         y|Y|yes|YES)
             ;;
         *)
@@ -109,6 +114,20 @@ check_main_wechat() {
         die "Unexpected WeChat Bundle ID: $bundle_id"
 }
 
+# Wait up to 5 seconds for both apps to exit. Returns non-zero if either
+# is still running.
+wait_for_exit() {
+    for _ in 1 2 3 4 5; do
+        if ! pgrep -f "$WECHAT_PROC_PATTERN" >/dev/null 2>&1 && \
+           ! pgrep -f "$WECHAT2_PROC_PATTERN" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+
+    return 1
+}
+
 quit_wechat() {
     info "Closing WeChat instances..."
 
@@ -118,23 +137,31 @@ quit_wechat() {
     osascript -e 'tell application id "com.tencent.xinWeChat2" to quit' \
         2>/dev/null || true
 
-    for _ in 1 2 3 4 5; do
-        if ! pgrep -f '/Applications/WeChat2.app/' >/dev/null 2>&1; then
-            break
-        fi
-        sleep 1
-    done
+    wait_for_exit || true
 
-    # Fallback for WeChat2 if it did not exit cleanly.
-    pkill -f '/Applications/WeChat2.app/' 2>/dev/null || true
+    # Fallback if either app did not exit cleanly.
+    pkill -f "$WECHAT_PROC_PATTERN" 2>/dev/null || true
+    pkill -f "$WECHAT2_PROC_PATTERN" 2>/dev/null || true
 
-    sleep 1
+    # SIGTERM may take a few seconds to tear the apps down.
+    wait_for_exit || true
+
+    # Reading from a still-running WeChat.app could produce a corrupt copy,
+    # and a still-running WeChat2 confuses the launch of the new bundle.
+    if pgrep -f "$WECHAT_PROC_PATTERN" >/dev/null 2>&1; then
+        die "WeChat is still running. Close it manually and retry."
+    fi
+
+    if pgrep -f "$WECHAT2_PROC_PATTERN" >/dev/null 2>&1; then
+        die "WeChat2 is still running. Close it manually and retry."
+    fi
 }
 
 copy_and_patch() {
     info "Copying latest WeChat.app..."
 
-    sudo cp -R "$WECHAT" "$WECHAT2"
+    # ditto preserves metadata, extended attributes, and resource forks.
+    sudo ditto "$WECHAT" "$WECHAT2"
 
     info "Changing Bundle ID to $SECOND_BUNDLE_ID..."
 
@@ -147,6 +174,12 @@ copy_and_patch() {
 
     [ "$bundle_id" = "$SECOND_BUNDLE_ID" ] || \
         die "Failed to change Bundle ID."
+
+    # Remove the quarantine attribute copied from the downloaded WeChat.app,
+    # otherwise Gatekeeper may block the re-signed copy.
+    info "Clearing quarantine attributes..."
+
+    sudo xattr -cr "$WECHAT2"
 
     info "Re-signing WeChat2.app..."
 

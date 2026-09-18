@@ -54,6 +54,8 @@ The script uses standard macOS utilities including:
 
 ```text
 PlistBuddy
+ditto
+xattr
 codesign
 osascript
 pkill
