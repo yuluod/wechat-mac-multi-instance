@@ -35,8 +35,10 @@ This allows macOS to treat `WeChat2.app` as a separate application.
 - Ad-hoc re-sign the modified application
 - Check WeChat and WeChat2 versions
 - Verify the modified application signature
+- Check free disk space before copying
 - Keep the previous WeChat2 version as a backup
 - Roll back to the previous version
+- Uninstall WeChat2 and its backup
 - Does not copy, modify, migrate, or delete WeChat chat data
 
 ## Requirements
@@ -88,6 +90,8 @@ Create the second WeChat instance:
 ```bash
 ./wechat-multi.sh install
 ```
+
+Run the script as your normal user, **not** with `sudo`. It asks for the administrator password itself when needed; running it as root would launch WeChat2 as root.
 
 Before making any changes, the script shows a summary of what will happen and asks for confirmation:
 
@@ -268,17 +272,20 @@ Always keep important chat data backed up.
 
 ## Uninstall
 
-Remove the second application:
+Remove the second application and its backup:
 
 ```bash
-sudo rm -rf /Applications/WeChat2.app
+./wechat-multi.sh uninstall
 ```
 
-If a backup application exists:
+This deletes:
 
-```bash
-sudo rm -rf /Applications/WeChat2.old.app
+```text
+/Applications/WeChat2.app
+/Applications/WeChat2.old.app
 ```
+
+Only WeChat2 is closed; the official WeChat keeps running.
 
 This project does not automatically delete WeChat data from `~/Library/Containers`.
 
